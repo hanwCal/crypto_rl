@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100%">
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="height: 100%; margin: 0">
+  <div style="padding: 10px;">
+    <label for="file-selector">Select a File:</label>
+    <select id="file-selector" style="margin-left: 10px;">
+      <!-- Options will be dynamically populated -->
+    </select>
+  </div>
+  <div id="container" style="height: calc(100% - 40px);"></div>
+
+  <script type="text/javascript" src="https://registry.npmmirror.com/jquery/3.7.1/files/dist/jquery.min.js"></script>
+  <script type="text/javascript" src="https://registry.npmmirror.com/echarts/5.5.1/files/dist/echarts.min.js"></script>
+
+  <script type="text/javascript">
+    var dom = document.getElementById('container');
+    var myChart = echarts.init(dom, null, {
+      renderer: 'canvas',
+      useDirtyRect: false
+    });
+    myChart.showLoading();
+
+    // Function to fetch and update the chart
+   // Function to fetch and update the chart
+  function updateChart(fileName) {
+    myChart.showLoading();
+    $.get('/data/' + fileName, function (data) {
+      myChart.hideLoading();
+
+      const timestamps = data.map(d => d.time_stamp);
+      const prices = data.map(d => d.current_price);
+      const upperBounds = data.map(d => d.upper_bound);
+      const lowerBounds = data.map(d => d.lower_bound);
+      const colors = data.map(d => d.color);
+
+      myChart.setOption({
+        title: { text: 'Price Prediction Visualization', left: 'center' },
+        tooltip: { trigger: 'axis' },
+        xAxis: {
+          type: 'category',
+          data: timestamps,
+          axisLabel: { formatter: value => new Date(value * 1000).toLocaleTimeString() }
+        },
+        yAxis: { type: 'value' },
+        series: [
+          {
+            name: 'Price',
+            type: 'line',
+            data: prices,
+            itemStyle: { color: '#0077ff' }
+          },
+          {
+            name: 'Upper Bound',
+            type: 'line',
+            data: upperBounds,
+            lineStyle: { opacity: 0 },
+            stack: 'confidence-band',
+            symbol: 'none'
+          },
+          {
+            name: 'Lower Bound',
+            type: 'line',
+            data: lowerBounds,
+            lineStyle: { opacity: 0 },
+            areaStyle: {
+              color: function(params) {
+                return colors[params.dataIndex];
+              }
+            },
+            stack: 'confidence-band',
+            symbol: 'none'
+          }
+        ]
+      });
+    });
+  }
+    // Populate the dropdown list with files
+    $.get('/files', function (files) {
+      if (Array.isArray(files)) {
+        const selector = $('#file-selector');
+        files.forEach(file => {
+          selector.append(`<option value="${file}">${file}</option>`);
+        });
+
+        // Set an initial file to load
+        if (files.length > 0) {
+          updateChart(files[0]);
+        }
+      } else {
+        alert('Failed to load file list.');
+      }
+    });
+
+    // Update chart when the file is selected
+    $('#file-selector').on('change', function () {
+      const selectedFile = $(this).val();
+      updateChart(selectedFile);
+    });
+  </script>
+</body>
+</html>

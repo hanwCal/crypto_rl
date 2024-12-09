@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100%">
+  <style>
+    label {
+      font-family: Arial, sans-serif; /* Replace with the desired font family */
+      font-size: 14px; /* Replace with the appropriate font size */
+      color: #7d7f87; /* Replace with the appropriate color */
+    }
+  </style>
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="height: 100%; margin: 0">
+  <div style="padding: 10px;">
+    <label for="file-selector">Select a Log ( Date | Pair Address ):</label>
+    <select id="file-selector" style="margin-left: 10px;"></select>
+  </div>
+  <div id="container" style="height: calc(100% - 40px);"></div>
+
+  <script type="text/javascript" src="https://registry.npmmirror.com/jquery/3.7.1/files/dist/jquery.min.js"></script>
+  <script type="text/javascript" src="https://registry.npmmirror.com/echarts/5.5.1/files/dist/echarts.min.js"></script>
+
+  <script type="text/javascript">
+    const upColor = '#00da3c';
+    const downColor = '#ec0000';
+
+    // Function to fetch and update chart
+    function updateChart(fileName) {
+      const myChart = echarts.init(document.getElementById('container'));
+      myChart.showLoading();
+
+      $.get('/data/' + fileName, function (rawData) {
+        myChart.hideLoading();
+
+        const timestamps = rawData.map(d => d.time_stamp);
+        const prices = rawData.map(d => d.current_price);
+        const predictions = rawData.map(d => d.prediction);
+
+        const colors = rawData.map(d => d.color);
+        const volumes = predictions.map((value, index) => ({
+          value: [index, value - 0.5],
+          itemStyle: {
+            color: colors[index],
+          },
+        }));
+
+        myChart.setOption({
+          animation: false,
+          legend: {
+            bottom: 10,
+            left: 'center',
+            data: ['Current Price', 'Prediction Confidence'],
+          },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'cross',
+            },
+            formatter: function (params) {
+              const rawTimestamp = params[0].axisValue; // Extract the raw timestamp
+              const utcLabel = `UTC Timestamp: ${rawTimestamp}`; // Prepend "UTC Timestamp" label
+              let tooltipContent = `${utcLabel}<br/>`; // Start the tooltip with the UTC label
+
+              params.forEach(param => {
+                const actualValue = Array.isArray(param.value) ? param.value[1] : param.value; // Use the second value if it's an array
+                tooltipContent += `${param.marker} ${param.seriesName}: ${actualValue}<br/>`; // Add series data
+              });
+
+              return tooltipContent; // Return the formatted tooltip
+            },
+          },
+
+
+          grid: [
+            {
+              left: '10%',
+              right: '8%',
+              height: '50%',
+            },
+            {
+              left: '10%',
+              right: '8%',
+              top: '63%',
+              height: '16%',
+            },
+          ],
+          xAxis: [
+            {
+              type: 'category',
+              data: timestamps,
+              axisLabel: { formatter: value => new Date(value * 1000).toLocaleTimeString() },
+              boundaryGap: false,
+              axisLine: { onZero: false },
+              splitLine: { show: false },
+              min: 'dataMin',
+              max: 'dataMax',
+            },
+            {
+              type: 'category',
+              gridIndex: 1,
+              data: timestamps,
+              boundaryGap: false,
+              axisLine: { onZero: false },
+              axisTick: { show: false },
+              splitLine: { show: false },
+              axisLabel: { show: false },
+              min: 'dataMin',
+              max: 'dataMax',
+            },
+          ],
+          yAxis: [
+            {
+              scale: true,
+              splitArea: {
+                show: true,
+              },
+            },
+            {
+              scale: true,
+              gridIndex: 1,
+              splitNumber: 2,
+              axisLabel: { show: false },
+              axisLine: { show: false },
+              axisTick: { show: false },
+              splitLine: { show: false },
+            },
+          ],
+          dataZoom: [
+            {
+              type: 'inside',
+              xAxisIndex: [0, 1],
+              start: 98,
+              end: 100,
+            },
+            {
+              show: true,
+              xAxisIndex: [0, 1],
+              type: 'slider',
+              top: '85%',
+              start: 98,
+              end: 100,
+            },
+          ],
+          series: [
+            {
+              name: 'Current Price',
+              type: 'line',
+              data: prices,
+              smooth: true,
+              lineStyle: {
+                color: '#333',
+              },
+              showSymbol: false,
+            },
+            {
+              name: 'Prediction Confidence',
+              type: 'bar',
+              xAxisIndex: 1,
+              yAxisIndex: 1,
+              data: volumes,
+            },
+          ],
+        });
+      });
+    }
+
+    // Populate the dropdown with file options
+    $.get('/files', function (files) {
+      if (Array.isArray(files)) {
+        const selector = $('#file-selector');
+        files.forEach(file => {
+          // Extract date and pair address using a regular expression
+          const match = file.match(/time_series_(\d{4}-\d{2}-\d{2})_(.+)\.csv/);
+          if (match) {
+            const date = match[1]; // Extracted date
+            const pairAddress = match[2]; // Extracted pair address
+            // Add option to the dropdown with formatted display text
+            selector.append(`<option value="${file}">${date} | ${pairAddress}</option>`);
+          }
+        });
+
+        // Load initial chart for the first file
+        if (files.length > 0) {
+          updateChart(files[0]);
+        }
+      } else {
+        alert('Failed to load file list.');
+      }
+    });
+
+
+    // Update the chart when a new file is selected
+    $('#file-selector').on('change', function () {
+      const selectedFile = $(this).val();
+      updateChart(selectedFile);
+    });
+  </script>
+</body>
+</html>
